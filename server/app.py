@@ -23,12 +23,38 @@ def bakeries():
     bakeries = [bakery.to_dict() for bakery in Bakery.query.all()]
     return make_response(  bakeries,   200  )
 
-@app.route('/bakeries/<int:id>')
+@app.route('/bakeries/<int:id>', methods=['GET', 'PATCH', 'DELETE'])
 def bakery_by_id(id):
-
     bakery = Bakery.query.filter_by(id=id).first()
-    bakery_serialized = bakery.to_dict()
-    return make_response ( bakery_serialized, 200  )
+    if bakery == None:
+        response_body = {
+            "message": "This bakery does not exist in our database. Please try again."
+        }
+        response = make_response(response_body, 404)
+        return response
+
+    if request.method == 'GET':
+        bakery_serialized = bakery.to_dict()
+        return make_response(bakery_serialized, 200)
+
+    elif request.method == 'PATCH':
+        # Update bakery attributes
+        for attr in request.form:
+            setattr(bakery, attr, request.form.get(attr))
+        db.session.add(bakery)
+        db.session.commit()
+        bakery_serialized = bakery.to_dict()
+        return make_response(bakery_serialized, 200)
+
+    elif request.method == 'DELETE':
+        db.session.delete(bakery)
+        db.session.commit()
+        response_body = {
+            "delete_successful": True,
+            "message": "Bakery deleted."
+        }
+        response = make_response(response_body, 200)
+        return response
 
 @app.route('/baked_goods/by_price')
 def baked_goods_by_price():
@@ -45,5 +71,72 @@ def most_expensive_baked_good():
     most_expensive_serialized = most_expensive.to_dict()
     return make_response( most_expensive_serialized,   200  )
 
+
+@app.route('/baked_goods', methods=['GET', 'POST',])
+def get_baked_goods():
+    if request.method == 'GET':
+        baked_goods = []
+        for baked_good in BakedGood.query.all():
+            baked_good_dict = {
+                "id": baked_good.id,
+                "name": baked_good.name,
+                "price": baked_good.price,
+                "created_at": baked_good.created_at.strftime("%Y-%m-%d %H:%M:%S")  # Convert to string representation
+            }
+            baked_goods.append(baked_good_dict)
+
+        response = make_response(
+            jsonify(baked_goods),
+            200
+        )
+        response.headers["Content-Type"] = "application/json"
+
+        return response
+    
+    elif request.method == 'POST':
+        new_bakedgood = BakedGood(
+            id=request.form.get("id"),
+            name=request.form.get("name"),
+            price=request.form.get("price"),
+            created_at=request.form.get("created_at"),
+        )
+
+        db.session.add(new_bakedgood)
+        db.session.commit()
+
+        bakedgood_dict = new_bakedgood.to_dict()
+
+        response = make_response(
+            bakedgood_dict,
+            201
+        )
+
+        response.headers["Content-Type"] = "application/json"
+
+        return response
+
+@app.route('/baked_goods/<int:id>', methods=['DELETE'])
+def bakedgood_delete(id):
+    baked_good = BakedGood.query.get(id)
+
+    if baked_good is None:
+        response_body = {
+            "message": "Baked good not found."
+        }
+        response = make_response(jsonify(response_body), 404)
+        return response
+
+    db.session.delete(baked_good)
+    db.session.commit()
+
+    response_body = {
+        "delete_successful": True,
+        "message": "Baked good deleted."
+    }
+    response = make_response(jsonify(response_body), 200)
+    
+    response.headers["Content-Type"] = "application/json"
+    
+    return response
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
